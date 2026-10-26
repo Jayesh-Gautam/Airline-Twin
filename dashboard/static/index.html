@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airline Digital Twin</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>Airline Digital Twin</h1>
+    <p class="sub">6 fictional airlines, 2021&ndash;2025 &middot; PySpark + MongoDB &middot; fares, times and delays are real data; costs and profit are <span class="est">estimates</span></p>
+  </div>
+  <nav id="tabs">
+    <button data-tab="sim" class="active">Simulation</button>
+    <button data-tab="overview">Overview</button>
+    <button data-tab="routes">Routes</button>
+    <button data-tab="delays">Delays</button>
+    <button data-tab="fleet">Fleet &amp; cabins</button>
+    <button data-tab="quality">Data quality</button>
+    <button data-tab="mongo">MongoDB</button>
+  </nav>
+</header>
+
+<main>
+<!-- ============================ SIMULATION -->
+<section id="tab-sim" class="tab active">
+  <div class="controls card">
+    <button id="play" class="primary">&#9654; Play</button>
+    <label>Speed
+      <select id="speed">
+        <option value="3600">1 hour / sec</option>
+        <option value="21600">6 hours / sec</option>
+        <option value="86400" selected>1 day / sec</option>
+        <option value="604800">1 week / sec</option>
+        <option value="2592000">1 month / sec</option>
+      </select>
+    </label>
+    <label>Date <input type="date" id="datePick" min="2021-01-01" max="2025-12-31"></label>
+    <input type="range" id="slider" min="0" max="1825" value="0" aria-label="Simulation day">
+    <button id="reset">Reset</button>
+  </div>
+
+  <div class="clockrow">
+    <div class="card clock">
+      <div class="dow" id="clkDow">&nbsp;</div>
+      <div class="date" id="clkDate">&nbsp;</div>
+      <div class="time" id="clkTime">00:00 UTC</div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span>In the air now</span><b id="kAir">0</b></div>
+      <div class="kpi"><span>Departures today</span><b id="kDep">0</b></div>
+      <div class="kpi"><span>Passengers today</span><b id="kPax">0</b></div>
+      <div class="kpi"><span>Delayed today</span><b id="kDel">0</b></div>
+      <div class="kpi"><span>Revenue so far (real fares)</span><b id="kRev">0</b></div>
+      <div class="kpi"><span>Profit so far <em class="est">est.</em></span><b id="kProf">0</b></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Flight board <small id="boardNote"></small></h2>
+      <div class="scroll"><table id="board"><thead><tr>
+        <th>Flight</th><th>Route</th><th>Aircraft</th><th>Dep (UTC)</th><th>Arr (UTC)</th><th>Status</th><th>Pax / seats</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>Revenue by airline today</h2>
+      <div class="chart h180"><canvas id="cAirlines"></canvas></div>
+      <h2>Busiest departure airports today</h2>
+      <div id="airportList" class="chips"></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Cumulative fare revenue &mdash; the marker is the simulated date</h2>
+      <div class="chart"><canvas id="cCum"></canvas></div></div>
+    <div class="card"><h2>Daily revenue, last 30 days <small>(bars) and 7-day average (line)</small></h2>
+      <div class="chart"><canvas id="cDaily"></canvas></div></div>
+  </div>
+  <p class="note">The simulation replays the real departures from MongoDB (<code>flight_ops</code>, <code>a_sim_daily</code>, <code>a_sim_daily_airline</code>) against a simulated clock. Nothing is invented; profit uses estimated costs.</p>
+</section>
+
+<!-- ============================ OVERVIEW -->
+<section id="tab-overview" class="tab">
+  <div class="kpis wide" id="ovKpis"></div>
+  <div class="grid2">
+    <div class="card"><h2>Monthly fare revenue (real) and estimated profit</h2><div class="chart"><canvas id="cMonthly"></canvas></div></div>
+    <div class="card"><h2>Airline P&amp;L <em class="est">estimated, after maintenance</em></h2><div class="scroll"><table id="ovAirlines"></table></div></div>
+  </div>
+  <div class="card"><h2>Pipeline run <small id="runInfo"></small></h2><div class="grid2"><div class="chart h220"><canvas id="cTimings"></canvas></div><div id="ovCounts" class="chips"></div></div></div>
+</section>
+
+<!-- ============================ ROUTES -->
+<section id="tab-routes" class="tab">
+  <div class="controls card"><label>Airline <select id="routeAirline"><option value="">All airlines</option></select></label>
+    <span id="routeCount" class="muted"></span></div>
+  <div class="grid2">
+    <div class="card"><h2>Most profitable routes <em class="est">est.</em></h2><div class="chart"><canvas id="cTop"></canvas></div></div>
+    <div class="card"><h2>Least profitable routes <em class="est">est.</em></h2><div class="chart"><canvas id="cBottom"></canvas></div></div>
+  </div>
+  <div class="card"><h2>Route detail</h2><div class="scroll"><table id="routeTable"></table></div></div>
+</section>
+
+<!-- ============================ DELAYS -->
+<section id="tab-delays" class="tab">
+  <div class="grid2">
+    <div class="card"><h2>Delays by reason (15+ min)</h2><div class="chart"><canvas id="cReason"></canvas></div></div>
+    <div class="card"><h2>Worst departure airports (delay rate)</h2><div class="chart"><canvas id="cAirportDelay"></canvas></div></div>
+  </div>
+  <div class="card"><h2>Delay rate by aircraft model</h2><div class="chart h220"><canvas id="cModelDelay"></canvas></div></div>
+</section>
+
+<!-- ============================ FLEET -->
+<section id="tab-fleet" class="tab">
+  <div class="grid2">
+    <div class="card"><h2>Fuel burn per seat-hour <em class="est">estimated</em></h2><div class="chart"><canvas id="cFuel"></canvas></div></div>
+    <div class="card"><h2>Revenue share by cabin (real fares)</h2><div class="chart"><canvas id="cCabin"></canvas></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Booking lead time</h2><div class="chart h220"><canvas id="cLead"></canvas></div></div>
+    <div class="card"><h2>Busiest airports (departures + arrivals)</h2><div class="chart h220"><canvas id="cAirports"></canvas></div></div>
+  </div>
+  <div class="card"><h2>Most-used aircraft</h2><div class="scroll"><table id="utilTable"></table></div></div>
+</section>
+
+<!-- ============================ QUALITY -->
+<section id="tab-quality" class="tab">
+  <div class="card"><h2>What the Spark cleaning stage found</h2>
+    <p class="note">The clean 1M dataset shows zeros (no false positives). The 100K dirty copy has planted faults.</p>
+    <div class="scroll"><table id="qSummary"></table></div></div>
+  <div class="grid2">
+    <div class="card"><h2>Faults fixed on the dirty copy</h2><div class="chart"><canvas id="cFaults"></canvas></div></div>
+    <div class="card"><h2>Planted vs detected (answer key)</h2><div class="scroll"><table id="qKey"></table></div></div>
+  </div>
+</section>
+
+<!-- ============================ MONGO -->
+<section id="tab-mongo" class="tab">
+  <div class="card"><h2>Index proof <small>route + month query</small></h2><div id="idxBox" class="chips"></div></div>
+  <div id="queries"></div>
+</section>
+</main>
+
+<script src="/static/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

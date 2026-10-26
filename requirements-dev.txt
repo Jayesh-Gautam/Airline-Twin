@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest>=8
+mongomock>=4.1
+# presentation / reporting helpers (not part of the pipeline)
+matplotlib>=3.8
